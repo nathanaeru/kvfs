@@ -81,13 +81,12 @@ move_path(Owner, SrcPathComponents, DstPathComponents) ->
             {ok, SrcPayload} ->
                 FinalDstPath = resolve_dst_path(DstKhepriPath, SrcPathComponents),
                 UpdatedSrcPayload = SrcPayload#{updated_at => Now},
-                
                 ok = khepri_tx:put(FinalDstPath, UpdatedSrcPayload),
                 move_children_tx(SrcKhepriPath, FinalDstPath),
                 ok = khepri_tx:delete(SrcKhepriPath),
                 ok;
             _ ->
-                khepri_tx:abort(src_not_found)
+                khepri_tx:abort({error, {src_not_found, SrcKhepriPath}})
         end
     end).
 
@@ -100,12 +99,11 @@ copy_path(Owner, SrcPathComponents, DstPathComponents) ->
             {ok, SrcPayload} ->
                 FinalDstPath = resolve_dst_path(DstKhepriPath, SrcPathComponents),
                 UpdatedSrcPayload = SrcPayload#{created_at => Now, updated_at => Now},
-                
                 ok = khepri_tx:put(FinalDstPath, UpdatedSrcPayload),
                 copy_children_tx(SrcKhepriPath, FinalDstPath, Now),
                 ok;
             _ ->
-                khepri_tx:abort(src_not_found)
+                khepri_tx:abort({error, {src_not_found, SrcKhepriPath}})
         end
     end).
 
