@@ -11,9 +11,7 @@ init(Req0, Action) ->
 handle_action(list_dir, <<"GET">>, PathInfo, Req0) ->
     case PathInfo of
         [Owner | Rest] ->
-            OwnerBin = binary_to_existing_atom_or_bin(Owner),
-            RestBins = [binary_to_existing_atom_or_bin(P) || P <- Rest],
-            case kvfs_vfs:list_dir(OwnerBin, RestBins) of
+            case kvfs_vfs:list_dir(Owner, Rest) of
                 {ok, Entries} ->
                     Formatted = [format_entry(Name, Payload) || {Name, Payload} <- Entries],
                     reply_json(200, #{status => ok, entries => Formatted}, Req0);
@@ -25,9 +23,7 @@ handle_action(list_dir, <<"GET">>, PathInfo, Req0) ->
     end;
 
 handle_action(file_ops, <<"GET">>, [Owner | Rest], Req0) ->
-    OwnerBin = binary_to_existing_atom_or_bin(Owner),
-    RestBins = [binary_to_existing_atom_or_bin(P) || P <- Rest],
-    case kvfs_vfs:read_path(OwnerBin, RestBins) of
+    case kvfs_vfs:read_path(Owner, Rest) of
         {ok, Payload} ->
             reply_json(200, #{status => ok, data => Payload}, Req0);
         {error, not_found} ->
@@ -37,35 +33,31 @@ handle_action(file_ops, <<"GET">>, [Owner | Rest], Req0) ->
     end;
 
 handle_action(file_ops, <<"POST">>, [Owner | Rest], Req0) ->
-    OwnerBin = binary_to_existing_atom_or_bin(Owner),
-    RestBins = [binary_to_existing_atom_or_bin(P) || P <- Rest],
     {ok, Body, Req1} = cowboy_req:read_body(Req0),
-    Params = jsx:decode(Body, [return_maps]),
+    Params = try jsx:decode(Body, [return_maps]) catch _:_ -> #{} end,
     NodeType = maps:get(<<"type">>, Params, <<"file">>),
     
     Res = case NodeType of
         <<"directory">> ->
-            kvfs_vfs:create_directory(OwnerBin, RestBins);
+            kvfs_vfs:create_directory(Owner, Rest);
         _ ->
             Content = maps:get(<<"content">>, Params, <<"">>),
             Tags = maps:get(<<"tags">>, Params, []),
             MimeType = maps:get(<<"mime_type">>, Params, <<"text/plain">>),
-            kvfs_vfs:create_file(OwnerBin, RestBins, Content, Tags, MimeType)
+            kvfs_vfs:create_file(Owner, Rest, Content, Tags, MimeType)
     end,
     case Res of
         ok ->
-            kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => OwnerBin}),
+            kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
             reply_json(200, #{status => ok}, Req1);
         {error, Reason} ->
             reply_json(400, #{status => error, reason => format_reason(Reason)}, Req1)
     end;
 
 handle_action(file_ops, <<"DELETE">>, [Owner | Rest], Req0) ->
-    OwnerBin = binary_to_existing_atom_or_bin(Owner),
-    RestBins = [binary_to_existing_atom_or_bin(P) || P <- Rest],
-    case kvfs_vfs:delete_path(OwnerBin, RestBins) of
+    case kvfs_vfs:delete_path(Owner, Rest) of
         ok ->
-            kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => OwnerBin}),
+            kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
             reply_json(200, #{status => ok}, Req0);
         {error, Reason} ->
             reply_json(400, #{status => error, reason => format_reason(Reason)}, Req0)
@@ -73,8 +65,11 @@ handle_action(file_ops, <<"DELETE">>, [Owner | Rest], Req0) ->
 
 handle_action(move_path, <<"POST">>, _, Req0) ->
     {ok, Body, Req1} = cowboy_req:read_body(Req0),
-    #{<<"owner">> := Owner, <<"src">> := Src, <<"dst">> := Dst} = jsx:decode(Body, [return_maps]),
-    case kvfs_vfs:move_path(binary_to_existing_atom_or_bin(Owner), Src, Dst) of
+    Params = try jsx:decode(Body, [return_maps]) catch _:_ -> #{} end,
+    Owner = maps:get(<<"owner">>, Params, <<"alice">>),
+    Src = maps:get(<<"src">>, Params, []),
+    Dst = maps:get(<<"dst">>, Params, []),
+    case kvfs_vfs:move_path(Owner, Src, Dst) of
         ok ->
             kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
             reply_json(200, #{status => ok}, Req1);
@@ -84,8 +79,11 @@ handle_action(move_path, <<"POST">>, _, Req0) ->
 
 handle_action(copy_path, <<"POST">>, _, Req0) ->
     {ok, Body, Req1} = cowboy_req:read_body(Req0),
-    #{<<"owner">> := Owner, <<"src">> := Src, <<"dst">> := Dst} = jsx:decode(Body, [return_maps]),
-    case kvfs_vfs:copy_path(binary_to_existing_atom_or_bin(Owner), Src, Dst) of
+    Params = try jsx:decode(Body, [return_maps]) catch _:_ -> #{} end,
+    Owner = maps:get(<<"owner">>, Params, <<"alice">>),
+    Src = maps:get(<<"src">>, Params, []),
+    Dst = maps:get(<<"dst">>, Params, []),
+    case kvfs_vfs:copy_path(Owner, Src, Dst) of
         ok ->
             kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
             reply_json(200, #{status => ok}, Req1);
@@ -106,8 +104,7 @@ handle_action(search_tag, <<"GET">>, _, Req0) ->
 
 handle_action(user_quota, <<"GET">>, _, Req0) ->
     Owner = cowboy_req:binding(owner, Req0),
-    OwnerBin = binary_to_existing_atom_or_bin(Owner),
-    {ok, Quota} = kvfs_projection:get_user_quota(OwnerBin),
+    {ok, Quota} = kvfs_projection:get_user_quota(Owner),
     reply_json(200, #{status => ok, quota => Quota}, Req0);
 
 handle_action(_, _, _, Req0) ->
@@ -118,17 +115,19 @@ reply_json(Code, Map, Req) ->
     Req1 = cowboy_req:reply(Code, #{<<"content-type">> => <<"application/json">>}, Body, Req),
     {ok, Req1, list_dir}.
 
-format_entry(Name, Payload) ->
-    Payload#{name => Name}.
+%% Penanganan aman terhadap Payload non-map / undefined
+format_entry(Name, Payload) when is_map(Payload) ->
+    Payload#{name => Name};
+format_entry(Name, _OtherPayload) ->
+    #{
+        name => Name,
+        type => <<"directory">>,
+        size => 0,
+        tags => []
+    }.
 
 format_khepri_path([kvfs, Owner | Rest]) ->
     #{owner => Owner, path => Rest}.
-
-binary_to_existing_atom_or_bin(Bin) when is_binary(Bin) ->
-    try binary_to_existing_atom(Bin, utf8)
-    catch error:badarg -> Bin
-    end;
-binary_to_existing_atom_or_bin(Val) -> Val.
 
 format_reason(Reason) when is_binary(Reason) -> Reason;
 format_reason(Reason) -> list_to_binary(io_lib:format("~p", [Reason])).
