@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khepri Virtual File System (KVFS)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden">
+
+    <!-- Top TitleBar & Navigation -->
+    <header class="bg-slate-900 border-b border-slate-800 p-2 flex flex-col gap-2">
+        <div class="flex items-center justify-between px-2">
+            <div class="flex items-center gap-2">
+                <span class="text-xl">📁</span>
+                <span class="font-bold text-sm tracking-wide text-slate-200">KVFS Explorer</span>
+                <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-mono">Khepri + ETS</span>
+            </div>
+            <div class="flex items-center gap-3 text-xs font-mono text-slate-400" id="quotaBadge">
+                <span>Storage: 0 Bytes</span>
+                <span>|</span>
+                <span>Files: 0</span>
+            </div>
+        </div>
+
+        <!-- Address Bar & Actions Toolbar -->
+        <div class="flex items-center gap-2 text-sm">
+            <!-- Navigation buttons -->
+            <button onclick="navigateUp()" class="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white" title="Up one level">⬆️</button>
+            <button onclick="refreshCurrentDir()" class="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white" title="Refresh">🔄</button>
+
+            <!-- Breadcrumb Path Bar -->
+            <div class="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-1 flex items-center gap-1 font-mono text-xs overflow-x-auto" id="breadcrumb">
+                <span class="text-emerald-400 font-bold">/alice</span>
+            </div>
+
+            <!-- Toolbar Action Buttons -->
+            <button onclick="promptNewFolder()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1 rounded text-xs flex items-center gap-1 border border-slate-700">
+                <span>➕ New Folder</span>
+            </button>
+            <button onclick="promptNewFile()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1 font-semibold">
+                <span>📄 New File</span>
+            </button>
+
+            <!-- ETS Tag Search Box -->
+            <div class="relative w-64">
+                <input type="text" id="tagSearchInput" placeholder="Filter Tag via ETS..." 
+                       onkeyup="if(event.key==='Enter') searchTag()" 
+                       class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+                <button onclick="searchTag()" class="absolute right-2 top-1 text-xs">🔍</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace (Sidebar + Explorer List + Preview Panel) -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar Navigation Tree -->
+        <aside class="w-56 bg-slate-900/60 border-r border-slate-800 p-2 overflow-y-auto flex flex-col gap-1 text-xs font-mono">
+            <div class="text-slate-500 uppercase tracking-wider font-bold text-[10px] px-2 py-1">Quick Access</div>
+            <div onclick="navigateTo([])" class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer text-slate-300">
+                <span>🏠</span> Root (/alice)
+            </div>
+            <div onclick="navigateTo(['documents'])" class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer text-slate-300">
+                <span>📁</span> documents
+            </div>
+            <div onclick="navigateTo(['photos'])" class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer text-slate-300">
+                <span>📁</span> photos
+            </div>
+
+            <div class="text-slate-500 uppercase tracking-wider font-bold text-[10px] px-2 py-1 mt-4">Khepri Tree Status</div>
+            <div class="p-2 bg-slate-950 rounded border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <div>Backend: <span class="text-emerald-400">Connected</span></div>
+                <div>WS Sync: <span id="wsStatus" class="text-amber-400">Connecting...</span></div>
+            </div>
+        </aside>
+
+        <!-- Main Explorer Content View -->
+        <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+            <!-- Table Header -->
+            <div class="grid grid-cols-12 gap-2 p-2 bg-slate-900/40 border-b border-slate-800 text-xs font-bold text-slate-400 border-t border-slate-900">
+                <div class="col-span-5">Name</div>
+                <div class="col-span-2">Type</div>
+                <div class="col-span-2">Size</div>
+                <div class="col-span-3">Tags / Metadata</div>
+            </div>
+
+            <!-- Items List Grid -->
+            <div class="flex-1 overflow-y-auto p-1 space-y-0.5 text-xs font-mono" id="fileList">
+                <!-- Items populated by app.js -->
+            </div>
+
+            <!-- Bottom Live ETS Projection Monitor -->
+            <div class="h-44 bg-slate-900 border-t border-slate-800 p-3 flex flex-col gap-1">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-bold text-emerald-400 font-mono">⚡ Live ETS Projection Monitor (`kvfs_tag_index` & `kvfs_user_quota`)</span>
+                    <span class="text-[10px] text-slate-500 font-mono">Fast O(1) Lookups</span>
+                </div>
+                <div class="flex-1 grid grid-cols-2 gap-3 overflow-hidden">
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2 overflow-y-auto font-mono text-[11px] text-emerald-300" id="etsTagIndexView">
+                        Loading Tag Index ETS...
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2 overflow-y-auto font-mono text-[11px] text-cyan-300" id="etsQuotaView">
+                        Loading User Quota ETS...
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals & Overlays -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

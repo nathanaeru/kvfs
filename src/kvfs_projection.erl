@@ -3,16 +3,20 @@
 -include_lib("khepri/include/khepri.hrl").
 
 -export([
+    prepare/0,
     init/0,
     search_by_tag/1,
     get_user_quota/1,
     list_tag_index/0
 ]).
 
+prepare() ->
+    ensure_table(kvfs_tag_index, [bag, public, named_table, {read_concurrency, true}]),
+    ensure_table(kvfs_user_quota, [set, public, named_table, {read_concurrency, true}]),
+    ok.
+
 init() ->
-    %% Buat tabel ETS publik secara manual
-    catch ets:new(kvfs_tag_index, [bag, public, named_table, {read_concurrency, true}]),
-    catch ets:new(kvfs_user_quota, [set, public, named_table, {read_concurrency, true}]),
+    ok = prepare(),
 
     PathPattern = [kvfs, ?KHEPRI_WILDCARD_STAR, ?KHEPRI_WILDCARD_STAR_STAR],
 
@@ -28,9 +32,29 @@ init() ->
     ),
 
     %% Daftarkan proyeksi ke Khepri
-    ok = khepri:register_projection(PathPattern, TagProjection),
-    ok = khepri:register_projection(PathPattern, QuotaProjection),
+    ok = register_projection(PathPattern, TagProjection),
+    ok = register_projection(PathPattern, QuotaProjection),
     ok.
+
+ensure_table(Name, Options) ->
+    case ets:whereis(Name) of
+        undefined ->
+            _ = ets:new(Name, Options),
+            ok;
+        _Tid ->
+            ok
+    end.
+
+register_projection(PathPattern, Projection) ->
+    Name = khepri_projection:name(Projection),
+    case khepri:register_projection(PathPattern, Projection) of
+        ok ->
+            ok;
+        {error, {khepri, projection_already_exists, #{name := Name}}} ->
+            ok;
+        {error, _Reason} = Error ->
+            Error
+    end.
 
 %% --- API Publik ---
 
