@@ -46,7 +46,7 @@ priv/static/
 ### 1. Kloning Repositori
 
 ```bash
-git clone [https://github.com/username/kvfs.git](https://github.com/username/kvfs.git)
+git clone [https://github.com/nathanaeru/kvfs.git](https://github.com/nathanaeru/kvfs.git)
 cd kvfs
 ```
 
