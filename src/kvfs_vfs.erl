@@ -40,9 +40,9 @@ create_file(Owner, PathComponents, Content, Tags, MimeType) ->
 read_path(Owner, PathComponents) ->
     KhepriPath = build_path(Owner, PathComponents),
     case khepri:get(KhepriPath) of
-        {ok, #{KhepriPath := Payload}} ->
+        {ok, Payload} ->
             {ok, Payload};
-        {ok, Map} when map_size(Map) == 0 ->
+        {error, {khepri, node_not_found, _Details}} ->
             {error, not_found};
         Error ->
             Error
@@ -75,11 +75,11 @@ delete_path(Owner, PathComponents) ->
 move_path(Owner, SrcPathComponents, DstPathComponents) ->
     SrcKhepriPath = build_path(Owner, SrcPathComponents),
     DstKhepriPath = build_path(Owner, DstPathComponents),
+    Now = erlang:system_time(second),
     khepri:transaction(fun() ->
         case khepri_tx:get(SrcKhepriPath) of
-            {ok, #{SrcKhepriPath := SrcPayload}} ->
+            {ok, SrcPayload} ->
                 FinalDstPath = resolve_dst_path(DstKhepriPath, SrcPathComponents),
-                Now = erlang:system_time(second),
                 UpdatedSrcPayload = SrcPayload#{updated_at => Now},
                 
                 ok = khepri_tx:put(FinalDstPath, UpdatedSrcPayload),
@@ -94,15 +94,15 @@ move_path(Owner, SrcPathComponents, DstPathComponents) ->
 copy_path(Owner, SrcPathComponents, DstPathComponents) ->
     SrcKhepriPath = build_path(Owner, SrcPathComponents),
     DstKhepriPath = build_path(Owner, DstPathComponents),
+    Now = erlang:system_time(second),
     khepri:transaction(fun() ->
         case khepri_tx:get(SrcKhepriPath) of
-            {ok, #{SrcKhepriPath := SrcPayload}} ->
+            {ok, SrcPayload} ->
                 FinalDstPath = resolve_dst_path(DstKhepriPath, SrcPathComponents),
-                Now = erlang:system_time(second),
                 UpdatedSrcPayload = SrcPayload#{created_at => Now, updated_at => Now},
                 
                 ok = khepri_tx:put(FinalDstPath, UpdatedSrcPayload),
-                copy_children_tx(SrcKhepriPath, FinalDstPath),
+                copy_children_tx(SrcKhepriPath, FinalDstPath, Now),
                 ok;
             _ ->
                 khepri_tx:abort(src_not_found)
@@ -119,7 +119,7 @@ build_path(Owner, Component) ->
 %% Resolusi path seperti perintah mv/cp di Unix
 resolve_dst_path(DstKhepriPath, SrcPathComponents) ->
     case khepri_tx:get(DstKhepriPath) of
-        {ok, #{DstKhepriPath := #{type := directory}}} ->
+        {ok, #{type := directory}} ->
             Filename = lists:last(SrcPathComponents),
             DstKhepriPath ++ [Filename];
         _ ->
@@ -143,11 +143,10 @@ move_children_tx(SrcKhepriPath, FinalDstPath) ->
             ok
     end.
 
-copy_children_tx(SrcKhepriPath, FinalDstPath) ->
+copy_children_tx(SrcKhepriPath, FinalDstPath, Now) ->
     ChildPattern = SrcKhepriPath ++ ['**'],
     case khepri_tx:get_many(ChildPattern) of
         {ok, ChildrenMap} ->
-            Now = erlang:system_time(second),
             maps:fold(
                 fun(ChildPath, ChildPayload, ok) ->
                     RelativePath = ChildPath -- SrcKhepriPath,
