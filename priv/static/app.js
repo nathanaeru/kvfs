@@ -36,6 +36,7 @@ function initWebSocket() {
 
 // REST API Operations
 async function loadDirectory() {
+    clearSelection();
     const pathStr = currentPath.length > 0 ? '/' + currentPath.join('/') : '';
     renderBreadcrumb();
 
@@ -157,9 +158,9 @@ async function promptNewFile() {
     loadDirectory();
 }
 
-async function viewFileContent(filename) {
-    const pathArr = [...currentPath, filename];
-    const res = await fetch(`/api/file/${currentOwner}/${pathArr.join('/')}`);
+async function viewFileContent(filename, pathArr = [...currentPath, filename], owner = currentOwner) {
+    const path = pathArr.map(component => encodeURIComponent(component)).join('/');
+    const res = await fetch(`/api/file/${encodeURIComponent(owner)}/${path}`);
     const data = await res.json();
     if (data.status === 'ok') {
         alert(`📄 File: ${filename}\n\nContent:\n${data.data.content}\n\nTags: ${data.data.tags ? data.data.tags.join(', ') : 'None'}`);
@@ -167,6 +168,7 @@ async function viewFileContent(filename) {
 }
 
 async function searchTag() {
+    clearSelection();
     const tag = document.getElementById('tagSearchInput').value.trim();
     if (!tag) {
         loadDirectory();
@@ -183,8 +185,8 @@ async function searchTag() {
             return;
         }
 
-        container.innerHTML = data.matches.map(item => `
-            <div class="grid grid-cols-12 gap-2 p-2 bg-slate-900/80 rounded border border-emerald-900/50 text-slate-300 items-center">
+        container.innerHTML = data.matches.map((item, index) => `
+            <div data-match-index="${index}" class="grid grid-cols-12 gap-2 p-2 bg-slate-900/80 rounded border border-emerald-900/50 text-slate-300 items-center cursor-pointer">
                 <div class="col-span-5 flex items-center gap-2 font-mono text-emerald-400 font-bold">
                     <span>📄</span>
                     <span>${item.path.join('/')}</span>
@@ -193,6 +195,14 @@ async function searchTag() {
                 <div class="col-span-3 font-mono text-xs text-emerald-300">Tag: ${tag}</div>
             </div>
         `).join('');
+
+        container.querySelectorAll('[data-match-index]').forEach((row, index) => {
+            const item = data.matches[index];
+            row.title = 'Double-click to open file';
+            row.addEventListener('dblclick', () => {
+                viewFileContent(item.path[item.path.length - 1], item.path, item.owner);
+            });
+        });
     }
 }
 
@@ -231,4 +241,36 @@ function selectRow(element, name) {
     document.querySelectorAll('#fileList > div').forEach(el => el.classList.remove('bg-slate-800', 'border-slate-700'));
     element.classList.add('bg-slate-800', 'border-slate-700');
     selectedItem = name;
+    document.getElementById('deleteSelectedButton').disabled = false;
+}
+
+function clearSelection() {
+    selectedItem = null;
+    document.getElementById('deleteSelectedButton').disabled = true;
+}
+
+async function deleteSelectedItem() {
+    if (!selectedItem) return;
+
+    const itemPath = [...currentPath, selectedItem];
+    const pathLabel = `/${currentOwner}/${itemPath.join('/')}`;
+    if (!confirm(`Delete "${pathLabel}"? This cannot be undone.`)) return;
+
+    try {
+        const path = itemPath.map(component => encodeURIComponent(component)).join('/');
+        const res = await fetch(`/api/file/${encodeURIComponent(currentOwner)}/${path}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+
+        if (!res.ok || data.status !== 'ok') {
+            throw new Error(data.reason || `HTTP ${res.status}`);
+        }
+
+        clearSelection();
+        await Promise.all([loadDirectory(), updateQuota()]);
+    } catch (err) {
+        console.error('Failed to delete path:', err);
+        alert(`Failed to delete "${pathLabel}": ${err.message}`);
+    }
 }

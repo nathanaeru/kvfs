@@ -92,6 +92,15 @@ Melalui antarmuka web, Anda dapat:
 - Melakukan pencarian berkas berdasarkan tag di indeks ETS secara instan.
 - Mengamati pembaruan kuota penyimpanan dan tabel ETS secara live di panel bawah.
 
+### 3. Seeding Database
+
+Dengan server sudah berjalan di localhost, buka terminal baru di direktori proyek, lalu jalankan perintah berikut di untuk seeding file demo.
+
+```bash
+chmod +x seed.sh
+./seed.sh
+```
+
 ## Dokumentasi REST API
 
 Semua respons API dikembalikan dalam format JSON.
@@ -123,6 +132,14 @@ Mencari file berdasarkan tag dari ETS:
 ```bash
 curl http://localhost:8080/api/search/tag?tag=fp
 ```
+
+Menghapus file atau direktori:
+
+```bash
+curl -X DELETE http://localhost:8080/api/file/alice/documents/notes.txt
+```
+
+Endpoint `DELETE /api/file/:owner/*path` tidak memerlukan request body. Jika berhasil, API mengembalikan HTTP `200` dengan `{"status":"ok"}`; jika gagal, API mengembalikan JSON berisi `status: "error"` dan alasan kegagalan. URL-encode setiap komponen path yang mengandung karakter khusus.
 
 ## Lisensi
 
