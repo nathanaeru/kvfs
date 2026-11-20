@@ -69,13 +69,7 @@ handle_action(move_path, <<"POST">>, _, Req0) ->
     Owner = maps:get(<<"owner">>, Params, <<"alice">>),
     Src = maps:get(<<"src">>, Params, []),
     Dst = maps:get(<<"dst">>, Params, []),
-    case kvfs_vfs:move_path(Owner, Src, Dst) of
-        ok ->
-            kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
-            reply_json(200, #{status => ok}, Req1);
-        {error, Reason} ->
-            reply_json(400, #{status => error, reason => format_reason(Reason)}, Req1)
-    end;
+    reply_path_operation(kvfs_vfs:move_path(Owner, Src, Dst), Owner, Req1);
 
 handle_action(copy_path, <<"POST">>, _, Req0) ->
     {ok, Body, Req1} = cowboy_req:read_body(Req0),
@@ -83,13 +77,7 @@ handle_action(copy_path, <<"POST">>, _, Req0) ->
     Owner = maps:get(<<"owner">>, Params, <<"alice">>),
     Src = maps:get(<<"src">>, Params, []),
     Dst = maps:get(<<"dst">>, Params, []),
-    case kvfs_vfs:copy_path(Owner, Src, Dst) of
-        ok ->
-            kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
-            reply_json(200, #{status => ok}, Req1);
-        {error, Reason} ->
-            reply_json(400, #{status => error, reason => format_reason(Reason)}, Req1)
-    end;
+    reply_path_operation(kvfs_vfs:copy_path(Owner, Src, Dst), Owner, Req1);
 
 handle_action(search_tag, <<"GET">>, _, Req0) ->
     #{tag := Tag} = cowboy_req:match_qs([{tag, [], undefined}], Req0),
@@ -109,6 +97,14 @@ handle_action(user_quota, <<"GET">>, _, Req0) ->
 
 handle_action(_, _, _, Req0) ->
     reply_json(405, #{status => error, reason => <<"method_not_allowed">>}, Req0).
+
+reply_path_operation({ok, ok}, Owner, Req) ->
+    reply_path_operation(ok, Owner, Req);
+reply_path_operation(ok, Owner, Req) ->
+    kvfs_ws_handler:broadcast(#{event => <<"tree_updated">>, owner => Owner}),
+    reply_json(200, #{status => ok}, Req);
+reply_path_operation({error, Reason}, _Owner, Req) ->
+    reply_json(400, #{status => error, reason => format_reason(Reason)}, Req).
 
 reply_json(Code, Map, Req) ->
     Body = jsx:encode(Map),

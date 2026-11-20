@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950 text-slate-100 select-none">
+<html lang="en" class="h-full bg-white text-slate-900 select-none">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,20 +7,20 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="h-full flex flex-col font-sans overflow-hidden">
 
     <!-- Top TitleBar & Navigation -->
-    <header class="bg-slate-900 border-b border-slate-800 p-2 flex flex-col gap-2">
+    <header class="bg-white border-b border-slate-200 p-2 flex flex-col gap-2">
         <div class="flex items-center justify-between px-2">
             <div class="flex items-center gap-2">
                 <span class="text-xl">📁</span>
-                <span class="font-bold text-sm tracking-wide text-slate-200">KVFS Explorer</span>
-                <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-mono">Khepri + ETS</span>
+                <span class="font-bold text-sm tracking-wide text-slate-800">KVFS Explorer</span>
+                <span class="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-mono">Khepri + ETS</span>
             </div>
             <div class="flex items-center gap-3 text-xs font-mono text-slate-400" id="quotaBadge">
                 <span>Storage: 0 Bytes</span>
@@ -32,23 +32,31 @@
         <!-- Address Bar & Actions Toolbar -->
         <div class="flex items-center gap-2 text-sm">
             <!-- Navigation buttons -->
-            <button onclick="navigateUp()" class="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white" title="Up one level">⬆️</button>
-            <button onclick="refreshCurrentDir()" class="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white" title="Refresh">🔄</button>
+            <button onclick="navigateUp()" class="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900" title="Up one level">⬆️</button>
+            <button onclick="refreshCurrentDir()" class="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900" title="Refresh">🔄</button>
 
             <!-- Breadcrumb Path Bar -->
-            <div class="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-1 flex items-center gap-1 font-mono text-xs overflow-x-auto" id="breadcrumb">
-                <span class="text-emerald-400 font-bold">/alice</span>
+            <div class="flex-1 bg-slate-50 border border-slate-300 rounded px-3 py-1 flex items-center gap-1 font-mono text-xs overflow-x-auto" id="breadcrumb">
+                <span class="text-emerald-600 font-bold">/alice</span>
             </div>
 
             <!-- Toolbar Action Buttons -->
-            <button onclick="promptNewFolder()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1 rounded text-xs flex items-center gap-1 border border-slate-700">
+            <button onclick="promptNewFolder()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded text-xs flex items-center gap-1 border border-slate-300">
                 <span>➕ New Folder</span>
             </button>
             <button onclick="promptNewFile()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1 font-semibold">
                 <span>📄 New File</span>
             </button>
+            <button id="moveSelectedButton" onclick="moveSelectedItem()" disabled
+                    class="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded text-xs flex items-center gap-1 border border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                <span>↪️ Move</span>
+            </button>
+            <button id="copySelectedButton" onclick="copySelectedItem()" disabled
+                    class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1 rounded text-xs flex items-center gap-1 border border-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                <span>📋 Copy</span>
+            </button>
             <button id="deleteSelectedButton" onclick="deleteSelectedItem()" disabled
-                    class="bg-red-900 hover:bg-red-800 text-red-100 px-3 py-1 rounded text-xs flex items-center gap-1 border border-red-800 disabled:opacity-40 disabled:cursor-not-allowed">
+                    class="bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1 rounded text-xs flex items-center gap-1 border border-red-200 disabled:opacity-40 disabled:cursor-not-allowed">
                 <span>❌ Delete</span>
             </button>
 
@@ -56,7 +64,7 @@
             <div class="relative w-64">
                 <input type="text" id="tagSearchInput" placeholder="Filter Tag via ETS..." 
                        onkeyup="if(event.key==='Enter') searchTag()" 
-                       class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono">
+                       class="w-full bg-white border border-slate-300 rounded px-3 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-mono">
                 <button onclick="searchTag()" class="absolute right-2 top-1 text-xs">🔍</button>
             </div>
         </div>
@@ -66,29 +74,29 @@
     <div class="flex-1 flex overflow-hidden">
         
         <!-- Sidebar Navigation Tree -->
-        <aside class="w-56 bg-slate-900/60 border-r border-slate-800 p-2 overflow-y-auto flex flex-col gap-1 text-xs font-mono">
+        <aside class="w-56 bg-slate-50 border-r border-slate-200 p-2 overflow-y-auto flex flex-col gap-1 text-xs font-mono">
             <div class="text-slate-500 uppercase tracking-wider font-bold text-[10px] px-2 py-1">Quick Access</div>
-            <div onclick="navigateTo([])" class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer text-slate-300">
+            <div onclick="navigateTo([])" class="flex items-center gap-2 p-1.5 hover:bg-slate-200 rounded cursor-pointer text-slate-700">
                 <span>🏠</span> Root (/alice)
             </div>
-            <div onclick="navigateTo(['documents'])" class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer text-slate-300">
+            <div onclick="navigateTo(['documents'])" class="flex items-center gap-2 p-1.5 hover:bg-slate-200 rounded cursor-pointer text-slate-700">
                 <span>📁</span> documents
             </div>
-            <div onclick="navigateTo(['photos'])" class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer text-slate-300">
+            <div onclick="navigateTo(['photos'])" class="flex items-center gap-2 p-1.5 hover:bg-slate-200 rounded cursor-pointer text-slate-700">
                 <span>📁</span> photos
             </div>
 
             <div class="text-slate-500 uppercase tracking-wider font-bold text-[10px] px-2 py-1 mt-4">Khepri Tree Status</div>
-            <div class="p-2 bg-slate-950 rounded border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                <div>Backend: <span class="text-emerald-400">Connected</span></div>
-                <div>WS Sync: <span id="wsStatus" class="text-amber-400">Connecting...</span></div>
+            <div class="p-2 bg-white rounded border border-slate-200 text-[11px] text-slate-500 space-y-1">
+                <div>Backend: <span class="text-emerald-600">Connected</span></div>
+                <div>WS Sync: <span id="wsStatus" class="text-amber-600">Connecting...</span></div>
             </div>
         </aside>
 
         <!-- Main Explorer Content View -->
-        <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+        <main class="flex-1 flex flex-col bg-white overflow-hidden">
             <!-- Table Header -->
-            <div class="grid grid-cols-12 gap-2 p-2 bg-slate-900/40 border-b border-slate-800 text-xs font-bold text-slate-400 border-t border-slate-900">
+            <div class="grid grid-cols-12 gap-2 p-2 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 border-t border-slate-100">
                 <div class="col-span-5">Name</div>
                 <div class="col-span-2">Type</div>
                 <div class="col-span-2">Size</div>
@@ -101,16 +109,16 @@
             </div>
 
             <!-- Bottom Live ETS Projection Monitor -->
-            <div class="h-44 bg-slate-900 border-t border-slate-800 p-3 flex flex-col gap-1">
+            <div class="h-44 bg-slate-50 border-t border-slate-200 p-3 flex flex-col gap-1">
                 <div class="flex justify-between items-center text-xs">
-                    <span class="font-bold text-emerald-400 font-mono">⚡ Live ETS Projection Monitor (`kvfs_tag_index` & `kvfs_user_quota`)</span>
+                    <span class="font-bold text-emerald-700 font-mono">⚡ Live ETS Projection Monitor (`kvfs_tag_index` & `kvfs_user_quota`)</span>
                     <span class="text-[10px] text-slate-500 font-mono">Fast O(1) Lookups</span>
                 </div>
                 <div class="flex-1 grid grid-cols-2 gap-3 overflow-hidden">
-                    <div class="bg-slate-950 border border-slate-800 rounded p-2 overflow-y-auto font-mono text-[11px] text-emerald-300" id="etsTagIndexView">
+                    <div class="bg-white border border-slate-200 rounded p-2 overflow-y-auto font-mono text-[11px] text-emerald-700" id="etsTagIndexView">
                         Loading Tag Index ETS...
                     </div>
-                    <div class="bg-slate-950 border border-slate-800 rounded p-2 overflow-y-auto font-mono text-[11px] text-cyan-300" id="etsQuotaView">
+                    <div class="bg-white border border-slate-200 rounded p-2 overflow-y-auto font-mono text-[11px] text-cyan-700" id="etsQuotaView">
                         Loading User Quota ETS...
                     </div>
                 </div>
@@ -119,6 +127,25 @@
     </div>
 
     <!-- Modals & Overlays -->
+    <dialog id="appModal" aria-labelledby="appModalTitle" aria-describedby="appModalMessage"
+            class="w-[calc(100%-2rem)] max-w-md rounded-lg border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/40">
+        <form id="appModalForm" class="p-5">
+            <h2 id="appModalTitle" class="text-base font-semibold text-slate-900"></h2>
+            <p id="appModalMessage" class="mt-2 whitespace-pre-wrap text-sm text-slate-600"></p>
+            <div id="appModalInputContainer" class="mt-4 hidden">
+                <input id="appModalInput" type="text"
+                       class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none">
+                <textarea id="appModalTextarea" rows="5"
+                          class="hidden w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"></textarea>
+            </div>
+            <div class="mt-5 flex justify-end gap-2">
+                <button id="appModalCancel" type="button"
+                        class="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">Cancel</button>
+                <button id="appModalSubmit" type="submit"
+                        class="rounded bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-600">OK</button>
+            </div>
+        </form>
+    </dialog>
     <script src="/static/app.js"></script>
 </body>
 </html>

@@ -1,13 +1,79 @@
 let currentOwner = 'alice';
 let currentPath = [];
 let selectedItem = null;
+let selectedType = null;
+let modalResolver = null;
+let modalMode = null;
 
 // Initialize Workspace
 document.addEventListener('DOMContentLoaded', () => {
+    initializeModal();
     initWebSocket();
     loadDirectory();
     updateQuota();
 });
+
+function initializeModal() {
+    const dialog = document.getElementById('appModal');
+    const form = document.getElementById('appModalForm');
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const value = modalMode === 'prompt'
+            ? (document.getElementById('appModalTextarea').classList.contains('hidden')
+                ? document.getElementById('appModalInput').value
+                : document.getElementById('appModalTextarea').value)
+            : true;
+        finishModal(value);
+    });
+
+    document.getElementById('appModalCancel').addEventListener('click', () => {
+        finishModal(modalMode === 'prompt' ? null : false);
+    });
+
+    dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        finishModal(modalMode === 'prompt' ? null : false);
+    });
+}
+
+function showModal({ title, message = '', mode = 'alert', defaultValue = '', multiline = false }) {
+    const dialog = document.getElementById('appModal');
+    const inputContainer = document.getElementById('appModalInputContainer');
+    const input = document.getElementById('appModalInput');
+    const textarea = document.getElementById('appModalTextarea');
+    const cancelButton = document.getElementById('appModalCancel');
+
+    modalMode = mode;
+    document.getElementById('appModalTitle').textContent = title;
+    document.getElementById('appModalMessage').textContent = message;
+    document.getElementById('appModalSubmit').textContent = mode === 'confirm' ? 'Delete' : 'OK';
+    cancelButton.hidden = mode === 'alert';
+    inputContainer.classList.toggle('hidden', mode !== 'prompt');
+    input.hidden = multiline;
+    textarea.classList.toggle('hidden', !multiline);
+    input.value = multiline ? '' : defaultValue;
+    textarea.value = multiline ? defaultValue : '';
+
+    return new Promise((resolve) => {
+        modalResolver = resolve;
+        dialog.showModal();
+        if (mode === 'prompt') {
+            (multiline ? textarea : input).focus();
+        } else {
+            document.getElementById('appModalSubmit').focus();
+        }
+    });
+}
+
+function finishModal(value) {
+    const dialog = document.getElementById('appModal');
+    const resolve = modalResolver;
+    modalResolver = null;
+    modalMode = null;
+    dialog.close();
+    if (resolve) resolve(value);
+}
 
 // Real-time WebSocket Handler
 function initWebSocket() {
@@ -16,7 +82,7 @@ function initWebSocket() {
 
     ws.onopen = () => {
         document.getElementById('wsStatus').innerText = 'Active';
-        document.getElementById('wsStatus').className = 'text-emerald-400';
+        document.getElementById('wsStatus').className = 'text-emerald-600';
     };
 
     ws.onmessage = (event) => {
@@ -29,7 +95,7 @@ function initWebSocket() {
 
     ws.onclose = () => {
         document.getElementById('wsStatus').innerText = 'Disconnected';
-        document.getElementById('wsStatus').className = 'text-red-400';
+        document.getElementById('wsStatus').className = 'text-red-600';
         setTimeout(initWebSocket, 3000);
     };
 }
@@ -65,33 +131,45 @@ function renderFileList(entries) {
         const isDir = item.type === 'directory';
         const icon = isDir ? '📁' : '📄';
         const sizeStr = isDir ? '-' : `${item.size || 0} B`;
-        const tagsStr = item.tags ? item.tags.map(t => `<span class="bg-slate-800 text-emerald-400 px-1.5 py-0.5 rounded text-[10px]">${t}</span>`).join(' ') : '-';
+        const displayType = isDir ? item.type : (item.mime_type || 'text/plain');
+        const safeDisplayType = escapeHtml(displayType);
+        const tagsStr = item.tags ? item.tags.map(t => `<span class="bg-slate-100 text-emerald-700 px-1.5 py-0.5 rounded text-[10px]">${t}</span>`).join(' ') : '-';
 
         return `
-            <div onclick="selectRow(this, '${item.name}')" 
+            <div onclick="selectRow(this, '${item.name}', '${item.type}')"
                  ondblclick="handleDblClick('${item.name}', '${item.type}')" 
-                 class="grid grid-cols-12 gap-2 p-2 hover:bg-slate-900 rounded cursor-pointer border border-transparent hover:border-slate-800 text-slate-300 items-center">
+                 class="grid grid-cols-12 gap-2 p-2 hover:bg-slate-100 rounded cursor-pointer border border-transparent hover:border-slate-200 text-slate-700 items-center">
                 <div class="col-span-5 flex items-center gap-2 font-semibold">
                     <span>${icon}</span>
                     <span class="truncate">${item.name}</span>
                 </div>
-                <div class="col-span-2 text-slate-500">${item.type}</div>
-                <div class="col-span-2 text-slate-400">${sizeStr}</div>
+                <div class="col-span-2 truncate text-slate-500" title="${safeDisplayType}">${safeDisplayType}</div>
+                <div class="col-span-2 text-slate-500">${sizeStr}</div>
                 <div class="col-span-3 flex gap-1 overflow-x-auto">${tagsStr}</div>
             </div>
         `;
     }).join('');
 }
 
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
+}
+
 function renderBreadcrumb() {
     const el = document.getElementById('breadcrumb');
-    let html = `<span onclick="navigateTo([])" class="text-emerald-400 font-bold cursor-pointer hover:underline">/${currentOwner}</span>`;
+    let html = `<span onclick="navigateTo([])" class="text-emerald-600 font-bold cursor-pointer hover:underline">/${currentOwner}</span>`;
     
     let accPath = [];
     currentPath.forEach(part => {
         accPath.push(part);
         const pathTarget = [...accPath];
-        html += `<span class="text-slate-600">/</span><span onclick="navigateTo(['${pathTarget.join("','")}'])" class="cursor-pointer hover:underline text-slate-300">${part}</span>`;
+        html += `<span class="text-slate-400">/</span><span onclick="navigateTo(['${pathTarget.join("','")}'])" class="cursor-pointer hover:underline text-slate-700">${part}</span>`;
     });
 
     el.innerHTML = html;
@@ -125,7 +203,7 @@ function handleDblClick(name, type) {
 
 // Actions & Creation
 async function promptNewFolder() {
-    const name = prompt('Enter folder name:');
+    const name = await showModal({ title: 'New Folder', message: 'Enter folder name:', mode: 'prompt' });
     if (!name) return;
 
     const pathArr = [...currentPath, name];
@@ -138,10 +216,27 @@ async function promptNewFolder() {
 }
 
 async function promptNewFile() {
-    const name = prompt('Enter file name (e.g. notes.txt):');
+    const name = await showModal({ title: 'New File', message: 'Enter file name (e.g. notes.txt):', mode: 'prompt' });
     if (!name) return;
-    const content = prompt('Enter file content:', 'Sample text');
-    const tagsInput = prompt('Enter tags comma separated:', 'fp,urgent');
+    const mimeType = await showModal({
+        title: 'File Type',
+        message: 'Enter the file MIME type (e.g. application/json):',
+        mode: 'prompt',
+        defaultValue: 'text/plain'
+    });
+    const content = await showModal({
+        title: 'File Content',
+        message: 'Enter file content:',
+        mode: 'prompt',
+        defaultValue: 'Sample text',
+        multiline: true
+    });
+    const tagsInput = await showModal({
+        title: 'File Tags',
+        message: 'Enter tags comma separated:',
+        mode: 'prompt',
+        defaultValue: 'fp,urgent'
+    });
     const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()) : [];
 
     const pathArr = [...currentPath, name];
@@ -152,7 +247,7 @@ async function promptNewFile() {
             type: 'file',
             content: content || '',
             tags: tags,
-            mime_type: 'text/plain'
+            mime_type: mimeType || 'text/plain'
         })
     });
     loadDirectory();
@@ -163,7 +258,10 @@ async function viewFileContent(filename, pathArr = [...currentPath, filename], o
     const res = await fetch(`/api/file/${encodeURIComponent(owner)}/${path}`);
     const data = await res.json();
     if (data.status === 'ok') {
-        alert(`📄 File: ${filename}\n\nContent:\n${data.data.content}\n\nTags: ${data.data.tags ? data.data.tags.join(', ') : 'None'}`);
+        await showModal({
+            title: `📄 File: ${filename}`,
+            message: `Type: ${data.data.mime_type || 'text/plain'}\n\nContent:\n${data.data.content}\n\nTags: ${data.data.tags ? data.data.tags.join(', ') : 'None'}`
+        });
     }
 }
 
@@ -186,13 +284,13 @@ async function searchTag() {
         }
 
         container.innerHTML = data.matches.map((item, index) => `
-            <div data-match-index="${index}" class="grid grid-cols-12 gap-2 p-2 bg-slate-900/80 rounded border border-emerald-900/50 text-slate-300 items-center cursor-pointer">
-                <div class="col-span-5 flex items-center gap-2 font-mono text-emerald-400 font-bold">
+            <div data-match-index="${index}" class="grid grid-cols-12 gap-2 p-2 bg-slate-50 rounded border border-emerald-200 text-slate-700 items-center cursor-pointer">
+                <div class="col-span-5 flex items-center gap-2 font-mono text-emerald-700 font-bold">
                     <span>📄</span>
                     <span>${item.path.join('/')}</span>
                 </div>
                 <div class="col-span-4 text-slate-500 font-mono">Matched via ETS Index</div>
-                <div class="col-span-3 font-mono text-xs text-emerald-300">Tag: ${tag}</div>
+                <div class="col-span-3 font-mono text-xs text-emerald-700">Tag: ${tag}</div>
             </div>
         `).join('');
 
@@ -220,7 +318,7 @@ async function updateQuota() {
 
             // Update ETS Live Monitors View
             document.getElementById('etsQuotaView').innerHTML = `
-                <div class="font-bold border-b border-slate-800 pb-1 mb-1 text-slate-400">ETS Table: kvfs_user_quota</div>
+                <div class="font-bold border-b border-slate-200 pb-1 mb-1 text-slate-600">ETS Table: kvfs_user_quota</div>
                 <pre class="text-[10px]">${JSON.stringify(q, null, 2)}</pre>
             `;
         }
@@ -229,7 +327,7 @@ async function updateQuota() {
         const tagRes = await fetch(`/api/search/tag?tag=fp`);
         const tagData = await tagRes.json();
         document.getElementById('etsTagIndexView').innerHTML = `
-            <div class="font-bold border-b border-slate-800 pb-1 mb-1 text-slate-400">ETS Table: kvfs_tag_index (Sample Tag: 'fp')</div>
+            <div class="font-bold border-b border-slate-200 pb-1 mb-1 text-slate-600">ETS Table: kvfs_tag_index (Sample Tag: 'fp')</div>
             <pre class="text-[10px]">${JSON.stringify(tagData, null, 2)}</pre>
         `;
     } catch (err) {
@@ -237,16 +335,103 @@ async function updateQuota() {
     }
 }
 
-function selectRow(element, name) {
-    document.querySelectorAll('#fileList > div').forEach(el => el.classList.remove('bg-slate-800', 'border-slate-700'));
-    element.classList.add('bg-slate-800', 'border-slate-700');
+function selectRow(element, name, type) {
+    document.querySelectorAll('#fileList > div').forEach(el => el.classList.remove('bg-slate-100', 'border-slate-300'));
+    element.classList.add('bg-slate-100', 'border-slate-300');
     selectedItem = name;
+    selectedType = type;
+    document.getElementById('moveSelectedButton').disabled = false;
+    document.getElementById('copySelectedButton').disabled = false;
     document.getElementById('deleteSelectedButton').disabled = false;
 }
 
 function clearSelection() {
     selectedItem = null;
+    selectedType = null;
+    document.getElementById('moveSelectedButton').disabled = true;
+    document.getElementById('copySelectedButton').disabled = true;
     document.getElementById('deleteSelectedButton').disabled = true;
+}
+
+async function moveSelectedItem() {
+    await transferSelectedItem('move');
+}
+
+async function copySelectedItem() {
+    await transferSelectedItem('copy');
+}
+
+async function transferSelectedItem(action) {
+    if (!selectedItem) return;
+
+    const sourcePath = [...currentPath, selectedItem];
+    const pathLabel = `/${currentOwner}/${sourcePath.join('/')}`;
+    const destination = await showModal({
+        title: action === 'move' ? 'Move Item' : 'Copy Item',
+        message: `Enter a destination path relative to /${currentOwner}. An existing directory keeps the original name; otherwise the final path is used as the new name.`,
+        mode: 'prompt'
+    });
+    if (destination === null) return;
+
+    let destinationPath = destination.trim().replace(/^\/+|\/+$/g, '');
+    if (destinationPath === currentOwner) destinationPath = '';
+    else if (destinationPath.startsWith(`${currentOwner}/`)) {
+        destinationPath = destinationPath.slice(currentOwner.length + 1);
+    }
+
+    const destinationParts = destinationPath.split('/').filter(Boolean);
+    if (destinationParts.length === 0) {
+        await showModal({ title: 'Invalid Destination', message: 'Enter a destination path.' });
+        return;
+    }
+
+    const isSamePath = sourcePath.length === destinationParts.length
+        && sourcePath.every((part, index) => part === destinationParts[index]);
+    const isSameDirectory = sourcePath.length === destinationParts.length + 1
+        && sourcePath.slice(0, -1).every((part, index) => part === destinationParts[index]);
+    const isInsideSourceDirectory = selectedType === 'directory'
+        && destinationParts.length > sourcePath.length
+        && sourcePath.every((part, index) => part === destinationParts[index]);
+    if (isSamePath || isSameDirectory || isInsideSourceDirectory) {
+        await showModal({
+            title: 'Invalid Destination',
+            message: 'Choose a destination different from the selected item and its current directory.'
+        });
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                owner: currentOwner,
+                src: sourcePath,
+                dst: destinationParts
+            })
+        });
+        const responseBody = await res.text();
+        const hasBody = responseBody.trim().length > 0;
+        let data = null;
+        if (hasBody) {
+            try {
+                data = JSON.parse(responseBody);
+            } catch {
+                throw new Error(`Invalid server response (HTTP ${res.status})`);
+            }
+        }
+        if (!res.ok || (hasBody && data?.status !== 'ok')) {
+            throw new Error(data?.reason || `HTTP ${res.status}`);
+        }
+
+        await Promise.all([loadDirectory(), updateQuota()]);
+    } catch (err) {
+        console.error(`Failed to ${action} path:`, err);
+        await showModal({
+            title: `${action === 'move' ? 'Move' : 'Copy'} Failed`,
+            message: `Failed to ${action} "${pathLabel}": ${err.message}`
+        });
+    }
 }
 
 async function deleteSelectedItem() {
@@ -254,7 +439,11 @@ async function deleteSelectedItem() {
 
     const itemPath = [...currentPath, selectedItem];
     const pathLabel = `/${currentOwner}/${itemPath.join('/')}`;
-    if (!confirm(`Delete "${pathLabel}"? This cannot be undone.`)) return;
+    if (!await showModal({
+        title: 'Delete Item',
+        message: `Delete "${pathLabel}"? This cannot be undone.`,
+        mode: 'confirm'
+    })) return;
 
     try {
         const path = itemPath.map(component => encodeURIComponent(component)).join('/');
@@ -271,6 +460,9 @@ async function deleteSelectedItem() {
         await Promise.all([loadDirectory(), updateQuota()]);
     } catch (err) {
         console.error('Failed to delete path:', err);
-        alert(`Failed to delete "${pathLabel}": ${err.message}`);
+        await showModal({
+            title: 'Delete Failed',
+            message: `Failed to delete "${pathLabel}": ${err.message}`
+        });
     }
 }
